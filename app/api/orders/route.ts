@@ -1,9 +1,15 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient | undefined;
+
+function getPrisma() {
+  if (!prisma) prisma = new PrismaClient();
+  return prisma;
+}
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +22,7 @@ export async function POST(request: Request) {
     const reference = `ROHE-${timestamp}${randomAuth}`;
 
     // Database save
-    await prisma.order.create({
+    await getPrisma().order.create({
       data: {
         reference,
         customerName,
@@ -95,7 +101,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const orders = await prisma.order.findMany({
+    const orders = await getPrisma().order.findMany({
       orderBy: { createdAt: 'desc' }
     });
     return NextResponse.json({ orders });

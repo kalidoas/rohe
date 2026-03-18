@@ -1,9 +1,15 @@
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient | undefined;
+
+function getPrisma() {
+  if (!prisma) prisma = new PrismaClient();
+  return prisma;
+}
 
 export async function PATCH(
   request: Request,
@@ -23,7 +29,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
-    const updatedOrder = await prisma.order.update({
+    const updatedOrder = await getPrisma().order.update({
       where: { id: params.id },
       data: { status: status as 'NOUVEAU' | 'CONFIRME' | 'LIVRE' | 'ANNULE' }
     });
