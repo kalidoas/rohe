@@ -1,0 +1,4 @@
+app/api/orders/[id]/status/route.ts(2,10): error TS2305: Module '"@prisma/client"' has no exported member 'PrismaClient'.
+app/api/orders/route.ts(2,10): error TS2305: Module '"@prisma/client"' has no exported member 'PrismaClient'.
+app/checkout/page.tsx(77,13): error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.
+app/checkout/page.tsx(77,28): error TS7006: Parameter 'e' implicitly has an 'any' type.
