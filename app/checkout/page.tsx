@@ -9,6 +9,9 @@ import { z } from 'zod';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
 function renderWithSansNumbers(text: string) {
   return text.split(/(\d+)/g).map((part, i) => {
     if (!part) return null;
@@ -43,13 +46,29 @@ export default function Checkout() {
   
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [isMaintenance, setIsMaintenance] = useState(false);
   const total = getTotal();
 
   useEffect(() => {
-    if (cartItems.length === 0 && !isSubmitting) {
+    const checkMaintenance = async () => {
+      try {
+        const settingsDoc = await getDoc(doc(db, "settings", "general"));
+        if (settingsDoc.data()?.maintenance === true) {
+          setIsMaintenance(true);
+        }
+      } catch (err) {
+        console.error("Maintenance check failed", err);
+      }
+    };
+    checkMaintenance();
+  }, []);
+
+  useEffect(() => {
+    if (cartItems.length === 0 && !isSubmitting && !isSuccess && !isMaintenance) {
       router.push('/');
     }
-  }, [cartItems, router, isSubmitting]);
+  }, [cartItems, router, isSubmitting, isSuccess, isMaintenance]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,24 +103,28 @@ export default function Checkout() {
         totalPrice: total,
       };
 
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      await addDoc(collection(db, "orders"), {
+        client: formData.customerName,
+        phone: formData.customerPhone,
+        city: formData.city,
+        address: formData.address,
+        parfums: cartItems.map(item => item.name),
+        montant: total,
+        statut: "En attente",
+        note: "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
-      
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => '');
-        console.error('Order API error:', res.status, errorText);
-        if (res.status >= 500 || res.status === 0) {
-          alert("Une erreur est survenue. Veuillez réessayer.");
-        }
-        setIsSubmitting(false);
-        return;
-      }
 
-      reset();
-      router.push('/thank-you');
+      setFormData({
+        customerName: '',
+        customerPhone: '',
+        city: '',
+        address: ''
+      });
+      setIsSuccess(true);
+      reset(); 
+      setIsSubmitting(false);
       
     } catch (err: unknown) {
       console.error('Checkout submit error:', err);
@@ -110,7 +133,44 @@ export default function Checkout() {
     }
   };
 
-  if (cartItems.length === 0 && !isSubmitting) return null; // Avoid render flash while redirecting
+  if (isMaintenance) {
+    return (
+      <>
+        <Navbar cartCount={cartItems.length} />
+        <main className="flex-grow pt-24 pb-20 bg-cream selection:bg-gold/20 flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <h1 className="font-serif text-3xl text-charcoal mb-4">Site en maintenance</h1>
+          <p className="text-taupe text-lg">Le site est temporairement en maintenance. Revenez bientôt!</p>
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
+  if (isSuccess) {
+    return (
+      <>
+        <Navbar cartCount={0} />
+        <main className="flex-grow pt-24 pb-20 bg-cream selection:bg-gold/20 flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <div className="bg-white p-12 shadow-xl rounded-sm border border-gold/20 max-w-lg">
+            <h1 className="font-serif text-3xl text-charcoal mb-4 text-green-600">Commande reçue!</h1>
+            <p className="text-taupe text-lg mb-8">Nous vous contacterons sous 24h pour confirmer la livraison.</p>
+            <button 
+              onClick={() => {
+                setIsSuccess(false);
+                router.push('/');
+              }} 
+              className="inline-flex items-center justify-center bg-gold text-charcoal px-8 py-4 uppercase tracking-widest text-sm font-medium hover:bg-light-gold transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Retour à l'accueil
+            </button>
+          </div>
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
+  if (cartItems.length === 0 && !isSubmitting && !isSuccess && !isMaintenance) return null; // Avoid render flash while redirecting
 
   return (
     <>
